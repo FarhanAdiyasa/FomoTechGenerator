@@ -12,7 +12,6 @@ interface AnalysisResult {
 }
 
 export default function InputSection() {
-  const [skills, setSkills] = useState("");
   const [githubLink, setGithubLink] = useState("");
   const [showResults, setShowResults] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(
@@ -20,16 +19,6 @@ export default function InputSection() {
   );
   const [loading, setLoading] = useState(false); // Track loading state
   const [error, setError] = useState<string>(""); // Track error message
-
-  const mockResults: AnalysisResult = {
-    totalFomoScore: 45,
-    roast:
-      "You're using some old-school tech like `PHP` and `CodeIgniter`, it's time to step up your game! Laravel is the new hotness, and if you're still stuck with `jQuery` in 2024, you're missing out on modern tools like React and Vue. Your stack is looking tired and a bit dated, my friend. Time to wake up and smell the future.",
-    skillsToLearn:
-      "Learn `React`, `Node.js`, and explore modern JavaScript frameworks. Upgrade your PHP to Laravel and start learning AI and machine learning libraries to future-proof your career.",
-    summary:
-      "Based on the detected frameworks and libraries, your tech skills are somewhat outdated. You're proficient in PHP and some legacy frameworks, but you're missing out on the latest trends and tools in web development. Moving forward, you should focus on updating your skill set with modern JavaScript frameworks, like React and Vue, and start learning more about emerging technologies like AI and cloud computing.",
-  };
 
   const handleSubmit = async () => {
     // Reset error message when user tries to submit
