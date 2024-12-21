@@ -73,8 +73,8 @@ export default function InputSection() {
           Let’s Get Started
         </h2>
         <p className="text-gray-600 mb-8">
-          People may hate FOMO, but this one is necessary! Brace yourself, we're
-          about to judge just how FOMO you really are.
+          People may hate FOMO, but this one is necessary! Brace yourself,
+          we&apos;re about to judge just how FOMO you really are.
         </p>
 
         {/* Input Fields */}

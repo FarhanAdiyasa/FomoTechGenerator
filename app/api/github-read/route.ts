@@ -194,7 +194,7 @@ function cleanedResults(geminiResponse) {
 async function hitAPI(prompt) {
   try {
     const geminiResponse = await fetchGeminiAPI(prompt);
-    let resInJSON = JSON.parse(cleanedResults(geminiResponse));
+    const resInJSON = JSON.parse(cleanedResults(geminiResponse));
     return resInJSON;
   } catch {
     hitAPI(prompt);

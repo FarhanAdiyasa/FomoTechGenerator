@@ -3,7 +3,6 @@
 import Header from "./pages/Header";
 import HeroSection from "./pages/HeroSection";
 import Features from "./pages/Features";
-import Testimonials from "./pages/Testimonials";
 import InputSection from "./pages/InputSections";
 
 export default function Home() {
