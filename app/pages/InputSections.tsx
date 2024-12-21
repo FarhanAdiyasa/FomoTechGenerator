@@ -26,15 +26,18 @@ export default function InputSection() {
     setShowResults(false);
     setLoading(true); // Set loading to true when the button is clicked
     try {
-      const response = await fetch("/api/github-read", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          githubLink,
-        }),
-      });
+      const response = await fetch(
+        "https://fomo-tech-generator-gbzs.vercel.app/api/github-read",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            githubLink,
+          }),
+        }
+      );
 
       if (!response.ok) {
         throw new Error("Error fetching results from the API.");
