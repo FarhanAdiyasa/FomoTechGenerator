@@ -81,11 +81,14 @@ async function fetchGeminiAPI(
   delay: number = 1000 // Initial delay in milliseconds (1 second)
 ): Promise<any> {
   try {
-    const geminiResponse = await fetch("http://localhost:3000/api/gemini", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt }),
-    });
+    const geminiResponse = await fetch(
+      "https://fomo-tech-generator-gbzs.vercel.app/api/gemini",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt }),
+      }
+    );
 
     if (geminiResponse.status === 429) {
       throw new Error("Rate limit exceeded");
