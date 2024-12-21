@@ -12,7 +12,6 @@ interface AnalysisResult {
 }
 
 export default function InputSection() {
-  const [choice, setChoice] = useState<"skills" | "github">("github");
   const [skills, setSkills] = useState("");
   const [githubLink, setGithubLink] = useState("");
   const [showResults, setShowResults] = useState(false);
@@ -35,56 +34,47 @@ export default function InputSection() {
   const handleSubmit = async () => {
     // Reset error message when user tries to submit
     setError("");
+    setShowResults(false);
+    setLoading(true); // Set loading to true when the button is clicked
+    try {
+      const response = await fetch("/api/github-read", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          githubLink,
+        }),
+      });
 
-    if (
-      (choice === "skills" && skills) ||
-      (choice === "github" && githubLink)
-    ) {
-      setShowResults(false);
-      setLoading(true); // Set loading to true when the button is clicked
-      try {
-        const response = await fetch("/api/github-read", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            githubLink,
-          }),
-        });
-
-        if (!response.ok) {
-          throw new Error("Error fetching results from the API.");
-        }
-
-        const rawData = await response.text(); // Fetch response as text
-        const cleanedData = rawData
-          .replace(/^```json\n/, "") // Remove the opening code block
-          .replace(/```$/, ""); // Remove the closing code block
-
-        const parsedData = JSON.parse(cleanedData); // Parse the cleaned JSON string
-
-        // Validate the structure
-        if (
-          typeof parsedData.totalFomoScore !== "number" ||
-          typeof parsedData.roast !== "string" ||
-          typeof parsedData.skillsToLearn !== "string" ||
-          typeof parsedData.summary !== "string"
-        ) {
-          throw new Error("Unexpected API response format.");
-        }
-
-        setAnalysisResult(parsedData); // Set the cleaned and parsed data
-      } catch (error) {
-        console.error("Error:", error);
-        alert("An error occurred while fetching data.");
+      if (!response.ok) {
+        throw new Error("Error fetching results from the API.");
       }
-      setLoading(false); // Set loading to false after data is fetched
-      setShowResults(true);
-    } else {
-      // Set error message if fields are empty
-      setError("Please fill out the selected input!");
+
+      const rawData = await response.text(); // Fetch response as text
+      const cleanedData = rawData
+        .replace(/^```json\n/, "") // Remove the opening code block
+        .replace(/```$/, ""); // Remove the closing code block
+
+      const parsedData = JSON.parse(cleanedData); // Parse the cleaned JSON string
+
+      // Validate the structure
+      if (
+        typeof parsedData.totalFomoScore !== "number" ||
+        typeof parsedData.roast !== "string" ||
+        typeof parsedData.skillsToLearn !== "string" ||
+        typeof parsedData.summary !== "string"
+      ) {
+        throw new Error("Unexpected API response format.");
+      }
+
+      setAnalysisResult(parsedData); // Set the cleaned and parsed data
+    } catch (error) {
+      console.error("Error:", error);
+      alert("An error occurred while fetching data.");
     }
+    setLoading(false); // Set loading to false after data is fetched
+    setShowResults(true);
   };
 
   return (
@@ -99,32 +89,17 @@ export default function InputSection() {
         </p>
 
         {/* Input Fields */}
-        {choice === "skills" && (
-          <div className="mb-4">
-            <Input
-              type="text"
-              placeholder="Type your skills here (e.g., React, Python, Tailwind)"
-              value={skills}
-              onChange={(e) => setSkills(e.target.value)}
-              className={`w-full px-4 py-2 border rounded focus:ring focus:ring-blue-300 ${
-                error && !skills ? "border-red-500" : ""
-              }`}
-            />
-          </div>
-        )}
-        {choice === "github" && (
-          <div className="mb-4">
-            <Input
-              type="text"
-              placeholder="Type your github username"
-              value={githubLink}
-              onChange={(e) => setGithubLink(e.target.value)}
-              className={`w-full px-4 py-2 border rounded focus:ring focus:ring-blue-300 ${
-                error && !githubLink ? "border-red-500" : ""
-              }`}
-            />
-          </div>
-        )}
+        <div className="mb-4">
+          <Input
+            type="text"
+            placeholder="Type your github username"
+            value={githubLink}
+            onChange={(e) => setGithubLink(e.target.value)}
+            className={`w-full px-4 py-2 border rounded focus:ring focus:ring-blue-300 ${
+              error && !githubLink ? "border-red-500" : ""
+            }`}
+          />
+        </div>
 
         {/* Submit Button with Animation */}
         <Button

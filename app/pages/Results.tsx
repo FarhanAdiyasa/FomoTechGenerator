@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 interface AnalysisResult {
   results: {
     totalFomoScore: number;

@@ -1,7 +1,5 @@
 "use client";
 
-import { useState } from "react";
-
 export default function HeroSection() {
   // Function to handle smooth scroll to input section
   const scrollToInput = () => {
