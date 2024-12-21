@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import axios from "axios";
+import axios, { AxiosError } from "axios";
 import pLimit from "p-limit";
 
 const GITHUB_API_URL = "https://api.github.com";
@@ -7,28 +7,32 @@ const GITHUB_TOKEN = process.env.GITHUB_API_KEY;
 const MAX_CONCURRENT_REQUESTS = 5; // Maximum concurrent requests
 const PER_PAGE = 30;
 
-// Utility function to make authenticated GitHub API requests with retry logic
-async function fetchWithRateLimit(url) {
+async function fetchWithRateLimit(url: string) {
   try {
     const response = await axios.get(url, {
       headers: { Authorization: `Bearer ${GITHUB_TOKEN}` },
     });
     return response.data;
   } catch (error) {
-    if (
-      error.response?.status === 403 &&
-      error.response?.headers["x-ratelimit-remaining"] === "0"
-    ) {
-      const resetTime =
-        parseInt(error.response?.headers["x-ratelimit-reset"], 10) * 1000;
-      const delay = resetTime - Date.now();
-      console.warn(
-        `Rate limit exceeded. Retrying in ${Math.ceil(delay / 1000)} seconds...`
-      );
-      await new Promise((resolve) => setTimeout(resolve, delay));
-      return fetchWithRateLimit(url); // Retry after rate limit reset
+    if (error instanceof AxiosError) {
+      // Type-safe access to Axios error properties
+      if (
+        error.response?.status === 403 &&
+        error.response?.headers["x-ratelimit-remaining"] === "0"
+      ) {
+        const resetTime =
+          parseInt(error.response?.headers["x-ratelimit-reset"], 10) * 1000;
+        const delay = resetTime - Date.now();
+        console.warn(
+          `Rate limit exceeded. Retrying in ${Math.ceil(
+            delay / 1000
+          )} seconds...`
+        );
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        return fetchWithRateLimit(url); // Retry after rate limit reset
+      }
     }
-    throw error;
+    throw error; // If not an Axios error, rethrow it
   }
 }
 
@@ -62,7 +66,9 @@ async function analyzeFrameworksUsingGeminiAPI(
       frameworksList.forEach((framework: string) => frameworks.add(framework));
     }
   } catch (err) {
-    console.error(`Error analyzing frameworks for ${repoName}:`, err.message);
+    if (err instanceof AxiosError) {
+      console.error(`Error analyzing frameworks for ${repoName}:`, err.message);
+    }
   }
 
   return frameworks;
@@ -87,17 +93,19 @@ async function fetchGeminiAPI(
 
     return await geminiResponse.json();
   } catch (error) {
-    if (retries > 0 && error.message === "Rate limit exceeded") {
-      console.warn(
-        `Rate limit exceeded, retrying in ${
-          delay / 1000
-        }s... (${retries} retries left)`
-      );
-      await new Promise((resolve) => setTimeout(resolve, delay)); // Wait for `delay` time
-      return fetchGeminiAPI(prompt, retries - 1, delay * 2); // Retry with exponential backoff
+    if (error instanceof AxiosError) {
+      if (retries > 0 && error.message === "Rate limit exceeded") {
+        console.warn(
+          `Rate limit exceeded, retrying in ${
+            delay / 1000
+          }s... (${retries} retries left)`
+        );
+        await new Promise((resolve) => setTimeout(resolve, delay)); // Wait for `delay` time
+        return fetchGeminiAPI(prompt, retries - 1, delay * 2); // Retry with exponential backoff
+      }
+      console.error("Gemini API request failed:", error.message);
+      throw new Error("Failed to fetch data from Gemini");
     }
-    console.error("Gemini API request failed:", error.message);
-    throw new Error("Failed to fetch data from Gemini");
   }
 }
 
@@ -178,8 +186,13 @@ async function roastFrameworks(
     `;
   return await hitAPI(prompt);
 }
-function cleanedResults(geminiResponse) {
+interface GeminiResponse {
+  result: string;
+}
+
+function cleanedResults(geminiResponse: GeminiResponse): string {
   let cleanedResult = geminiResponse.result;
+
   if (
     geminiResponse.result.includes("```json\n") &&
     geminiResponse.result.includes("```")
@@ -188,10 +201,12 @@ function cleanedResults(geminiResponse) {
       .replace(/```json\n/, "")
       .replace(/```$/, "");
   }
+
   cleanedResult = cleanedResult.trim();
   return cleanedResult;
 }
-async function hitAPI(prompt) {
+
+async function hitAPI(prompt: string) {
   try {
     const geminiResponse = await fetchGeminiAPI(prompt);
     const resInJSON = JSON.parse(cleanedResults(geminiResponse));
@@ -200,7 +215,7 @@ async function hitAPI(prompt) {
     hitAPI(prompt);
   }
 }
-async function fetchAllRepositories(username) {
+async function fetchAllRepositories(username: string) {
   const repositories = [];
   let page = 1;
 
@@ -261,7 +276,6 @@ export async function POST(req: NextRequest) {
     const geminiResults = await roastFrameworks(frameworks, languages);
     return NextResponse.json(geminiResults);
   } catch (error) {
-    console.error("Error fetching GitHub data:", error.message);
     return NextResponse.json(
       { error: "Failed to fetch data from GitHub" },
       { status: 500 }
