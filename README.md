@@ -8,3 +8,10 @@ Programming Languages Review: Analyzes the languages used in your projects and r
 Personalized Recommendations: Provides actionable feedback and advice on what to learn and adopt to stay competitive in the tech industry.
 AI-Driven Feedback: Uses Gemini API to give brutally honest, yet constructive, feedback on your tech stack, using humor and trendy language.
 Rate-Limited GitHub API Requests: Efficiently handles GitHub API calls with built-in rate limit management and retries.
+
+
+## Demo Video
+
+Check out this demo video of the project:
+
+[![Watch the video](https://img.youtube.com/vi/bozfauO8ywk/0.jpg)](https://www.youtube.com/watch?v=bozfauO8ywk)
