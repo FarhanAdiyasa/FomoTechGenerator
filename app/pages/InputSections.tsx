@@ -4,7 +4,6 @@ import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import Results from "./Results";
-import { AxiosError } from "axios";
 interface AnalysisResult {
   totalFomoScore: number;
   roast: string;
@@ -39,9 +38,11 @@ export default function InputSection() {
           }),
         }
       );
+      if (!response.ok) {
+        throw new Error("Unexpected API response format.");
+      }
 
       const rawData = await response.text(); // Fetch response as text
-      console.log(rawData);
       const cleanedData = rawData
         .replace(/^```json\n/, "") // Remove the opening code block
         .replace(/```$/, ""); // Remove the closing code block
@@ -61,8 +62,7 @@ export default function InputSection() {
       setAnalysisResult(parsedData); // Set the cleaned and parsed data
     } catch (error) {
       console.error("Error:", error);
-      if (error instanceof AxiosError)
-        alert("An error occurred while fetching data." + error.message);
+      alert("An error occurred while fetching data.");
     }
     setLoading(false); // Set loading to false after data is fetched
     setShowResults(true);
