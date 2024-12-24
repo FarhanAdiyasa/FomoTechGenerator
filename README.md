@@ -1,4 +1,4 @@
-FOMO Tech Generator
+**FOMO Tech Generator**/n
 FOMO Tech Generator is an AI-powered web application designed to evaluate and provide insights into a developer's tech stack. By analyzing GitHub repositories, the platform generates a "Tech FOMO" score, identifying outdated frameworks, libraries, and programming languages, and offering personalized recommendations for modernization. It's an essential tool for developers to stay updated with the latest industry trends and technologies, ensuring they don’t fall behind in the fast-paced world of software development.
 
 Features
