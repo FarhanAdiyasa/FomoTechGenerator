@@ -279,11 +279,15 @@ export async function POST(req: NextRequest) {
     const geminiResults = await roastFrameworks(frameworks, languages);
     return NextResponse.json(geminiResults);
   } catch (error) {
-    if (error instanceof AxiosError) {
-      return NextResponse.json(
-        { error: "Failed to fetch data from GitHub" + error.message },
-        { status: 500 }
-      );
+    let errorMessage = "An unknown error occurred";
+
+    if (error instanceof Error) {
+      errorMessage = error.message; // Safely access the message property
     }
+
+    return NextResponse.json(
+      { error: `Failed to fetch data from GitHub: ${errorMessage}` },
+      { status: 500 }
+    );
   }
 }
