@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import Results from "./Results";
+import { AxiosError } from "axios";
 interface AnalysisResult {
   totalFomoScore: number;
   roast: string;
@@ -59,7 +60,8 @@ export default function InputSection() {
       setAnalysisResult(parsedData); // Set the cleaned and parsed data
     } catch (error) {
       console.error("Error:", error);
-      alert("An error occurred while fetching data.");
+      if (error instanceof AxiosError)
+        alert("An error occurred while fetching data." + error.message);
     }
     setLoading(false); // Set loading to false after data is fetched
     setShowResults(true);
