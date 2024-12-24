@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.error("Error calling Gemini API:", error);
     return NextResponse.json(
-      { error: "Failed to process the request" },
+      { error: `failed to process the request ${error.message}` },
       { status: 500 }
     );
   }

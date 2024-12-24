@@ -81,14 +81,11 @@ async function fetchGeminiAPI(
   delay: number = 1000 // Initial delay in milliseconds (1 second)
 ): Promise<any> {
   try {
-    const geminiResponse = await fetch(
-      "https://fomo-tech-generator-gbzs.vercel.app/api/gemini",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt }),
-      }
-    );
+    const geminiResponse = await fetch("http://localhost:3000/api/gemini", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt }),
+    });
 
     if (geminiResponse.status === 429) {
       throw new Error("Rate limit exceeded");
@@ -151,73 +148,45 @@ async function roastFrameworks(
   languages: Set<string>
 ): Promise<any> {
   const prompt = `  
-      Based on the following detected frameworks, libraries, and programming languages, provide a brutally honest roast along with solid recommendations for improvement and dont ever used '**' used <b>:
-
-      ### Considerations:
-      1. **Latest Frameworks/Libraries**: Compare the frameworks to the latest and most popular ones in the industry. For example, if someone is using outdated frameworks (e.g., CodeIgniter), recommend more modern alternatives (e.g., Laravel, React).
-      2. **Programming Languages**: Assess the programming languages detected in the project and compare them to the latest trends or newer languages. Provide a roast if the user is stuck on old or less-relevant languages.
-      3. **Version Usage**: Check if the user is using outdated versions of frameworks, libraries, or tools. Recommend upgrading to more recent versions, and explain the benefits of doing so.
-      4. **Trends**: Give a roast about missing out on trending tech (e.g., AI, cloud computing, modern frontend frameworks) if applicable.
-      5. Judge and explain why their stack is outdated why they should change it
-
+		You are a savvy tech consultant with a flair for humor and modern trends. Your task is to analyze GitHub repositories to evaluate the developer's tech stack and generate a "Tech FOMO" score. Provide entertaining, insightful, and practical feedback with recommendations for modernization. The response should be in english and use a light-hearted, casual tone with relevant slang, emojis, and pop culture references.
+      
+      Framework and languages used by the user to roast as long as you can and as heat as you can. descriptions style is the first-choice here, points are second:
       ### Detected Frameworks:
       - ${Array.from(frameworks).join(", ")} 
 
       ### Detected Languages:
       - ${Array.from(languages).join(", ")}
 
-     Provide the results in valid JSON format, valid means no raw newlines; instead, you should use \n to represent them:
-      {
-          "totalFomoScore": number, //(1-100)
-          "roast": string, // JSON strings must not contain raw newlines; instead, you should use \n to represent them.
-          "skillsToLearn": string, //JSON strings must not contain raw newlines; instead, you should use \n to represent them.
-          "summary": string, //JSON strings must not contain raw newlines; instead, you should use \n to represent them.
-      }
+      Tech Stack Analysis:
+      - Identify the main frameworks, libraries, and languages used across repositories.
+      - Highlight any outdated, niche, or trendy tech in their stack.
+      - Calculate a "Tech FOMO" score (scale of 0 to 100) based on modernization potential, activity level, and innovation.
+      - Suggest ways to modernize their tech stack or learn new tools.
 
+      Based on the data above, generate an insightful and fun evaluation:
+      1. Assess their current tech stack and point out any outdated or unconventional choices.
+      2. Provide personalized recommendations for:
+        - Modern frameworks and libraries to explore
+        - Popular tools and technologies to add to their stack
+        - Strategies for staying ahead in the fast-paced tech world
+      3. Share humorous commentary on their GitHub activity and profile details.
+      4. Conclude with motivational and encouraging words to inspire them to level up their skills.
 
       Style Guide:
-		- Use slang and trendy terms
-    - in roast, skillstolearn, and summary do just one paragraph, but make it very long like minimum 100 words
-		- Roasting should be spicy but constructive
-		- Feel free to use emojis 🔥  
+      - To separate each paragraphs use double '/n'
+      - Blend humor with actionable insights
+      - Include relevant tech slang, trendy references, and emojis 🎉
+      - Use <b> tags for highlights and bold text, avoid markdown or other formatting styles
+      - Keep the tone fun, constructive, and supportive
 
-		Note: Avoid:
-		- Harsh or offensive language
-		- Too personal criticism
-		- Markdown or formatting other than <b>
-      Be brutally honest in the roast and give clear, actionable advice on how the user can level up their skills and stay relevant in the tech industry. For example, if someone is using outdated tools or languages, suggest modern alternatives and provide reasoning.
-    `;
-  return await hitAPI(prompt);
-}
-interface GeminiResponse {
-  result: string;
+      Note: Avoid:
+      - Harsh or negative criticism
+      - Overly complex jargon without explanation
+      - Personal attacks or offensive language
+      `;
+  return await fetchGeminiAPI(prompt);
 }
 
-function cleanedResults(geminiResponse: GeminiResponse): string {
-  let cleanedResult = geminiResponse.result;
-
-  if (
-    geminiResponse.result.includes("```json\n") &&
-    geminiResponse.result.includes("```")
-  ) {
-    cleanedResult = geminiResponse.result
-      .replace(/```json\n/, "")
-      .replace(/```$/, "");
-  }
-
-  cleanedResult = cleanedResult.trim();
-  return cleanedResult;
-}
-
-async function hitAPI(prompt: string) {
-  try {
-    const geminiResponse = await fetchGeminiAPI(prompt);
-    const resInJSON = JSON.parse(cleanedResults(geminiResponse));
-    return resInJSON;
-  } catch {
-    hitAPI(prompt);
-  }
-}
 async function fetchAllRepositories(username: string) {
   const repositories = [];
   let page = 1;
@@ -234,7 +203,6 @@ async function fetchAllRepositories(username: string) {
   return repositories.slice(0, 10); // Return only the last 10 repositories
 }
 
-// Main handler for the POST request
 // Main handler for the POST request
 export async function POST(req: NextRequest) {
   try {
@@ -277,7 +245,7 @@ export async function POST(req: NextRequest) {
 
     // Get the analysis and feedback from Gemini for the frameworks
     const geminiResults = await roastFrameworks(frameworks, languages);
-    return NextResponse.json(geminiResults);
+    return new NextResponse(geminiResults.result);
   } catch (error) {
     let errorMessage = "An unknown error occurred";
 

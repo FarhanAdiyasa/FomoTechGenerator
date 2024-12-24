@@ -4,19 +4,11 @@ import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import Results from "./Results";
-interface AnalysisResult {
-  totalFomoScore: number;
-  roast: string;
-  skillsToLearn: string;
-  summary: string;
-}
 
 export default function InputSection() {
   const [githubLink, setGithubLink] = useState("");
   const [showResults, setShowResults] = useState(false);
-  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(
-    null
-  );
+  const [analysisResult, setAnalysisResult] = useState("");
   const [loading, setLoading] = useState(false); // Track loading state
   const [error, setError] = useState<string>(""); // Track error message
 
@@ -26,40 +18,22 @@ export default function InputSection() {
     setShowResults(false);
     setLoading(true); // Set loading to true when the button is clicked
     try {
-      const response = await fetch(
-        "https://fomo-tech-generator-gbzs.vercel.app/api/github-read",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            githubLink,
-          }),
-        }
-      );
+      const response = await fetch("/api/github-read", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          githubLink,
+        }),
+      });
       if (!response.ok) {
         throw new Error("Unexpected API response format.");
       }
 
-      const rawData = await response.text(); // Fetch response as text
-      const cleanedData = rawData
-        .replace(/^```json\n/, "") // Remove the opening code block
-        .replace(/```$/, ""); // Remove the closing code block
+      const rawData = await response.text();
 
-      const parsedData = JSON.parse(cleanedData); // Parse the cleaned JSON string
-
-      // Validate the structure
-      if (
-        typeof parsedData.totalFomoScore !== "number" ||
-        typeof parsedData.roast !== "string" ||
-        typeof parsedData.skillsToLearn !== "string" ||
-        typeof parsedData.summary !== "string"
-      ) {
-        throw new Error("Unexpected API response format.");
-      }
-
-      setAnalysisResult(parsedData); // Set the cleaned and parsed data
+      setAnalysisResult(rawData); // Set the cleaned and parsed data
     } catch (error) {
       console.error("Error:", error);
       alert("An error occurred while fetching data.");
