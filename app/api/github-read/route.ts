@@ -208,7 +208,7 @@ async function fetchAllRepositories(username: string) {
   const repositories = [];
   let page = 1;
 
-  while (repositories.length < 10) {
+  while (repositories.length < 6) {
     // Fetch until we have 10 repositories
     const url = `${GITHUB_API_URL}/users/${username}/repos?per_page=${PER_PAGE}&page=${page}`;
     const batch = await fetchWithRateLimit(url);
