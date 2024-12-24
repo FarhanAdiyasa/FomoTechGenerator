@@ -3,38 +3,61 @@ import axios, { AxiosError } from "axios";
 import pLimit from "p-limit";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const apiKey = process.env.GEMINI_API_KEY;
+// Configuration
 const GITHUB_API_URL = "https://api.github.com";
 const GITHUB_TOKEN = process.env.GITHUB_API_KEY;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const MAX_CONCURRENT_REQUESTS = 5; // Maximum concurrent requests
 const PER_PAGE = 30;
-if (!apiKey) {
+
+const MAX_RETRIES = 3;
+const INITIAL_DELAY = 1000; //
+// Error handling: Ensure API keys are set
+if (!GEMINI_API_KEY) {
   throw new Error("GEMINI_API_KEY is not set in .env.local");
 }
 
-const genAI = new GoogleGenerativeAI(apiKey);
-async function geminiAi(prompt: string) {
-  try {
+const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+
+// Function to call Gemini API directly
+export async function fetchGeminiAPI(
+  prompt: string,
+  retries: number = MAX_RETRIES,
+  delay: number = INITIAL_DELAY
+): Promise<any> {
+  async function callGemini(prompt: string): Promise<string> {
     // Instantiate the model
     const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
     // Generate a response
     const result = await model.generateContent(prompt);
     const response = await result.response;
-    const text = response.text();
-
-    return NextResponse.json({ result: text });
-  } catch (error) {
-    let errorMessage = "An unknown error occurred";
-
-    if (error instanceof Error) {
-      errorMessage = error.message; // Safely access the message property
-    }
-    return NextResponse.json(
-      { error: `failed to process the request ${errorMessage}` },
-      { status: 500 }
-    );
+    return response.text();
   }
+
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      return await callGemini(prompt);
+    } catch (error) {
+      if (error instanceof AxiosError || error instanceof Error) {
+        if (
+          attempt < retries &&
+          error.message.includes("Rate limit exceeded")
+        ) {
+          console.warn(
+            `Rate limit exceeded, retrying in ${delay / 1000}s... (${
+              retries - attempt
+            } retries left)`
+          );
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          delay *= 2; // Exponential backoff
+        } else {
+          throw new Error(`Failed to fetch data: ${error.message}`);
+        }
+      }
+    }
+  }
+  throw new Error("All retries failed.");
 }
 
 async function fetchWithRateLimit(url: string) {
@@ -75,7 +98,7 @@ async function analyzeFrameworksUsingGeminiAPI(
 
   try {
     const contents = await fetchWithRateLimit(
-      `${GITHUB_API_URL}/repos/${username}/${repoName}/contents`
+      `https://api.github.com/repos/${username}/${repoName}/contents`
     );
     const files = contents.filter((file: any) => file.type === "file");
     const summarizedContents = files
@@ -83,10 +106,9 @@ async function analyzeFrameworksUsingGeminiAPI(
       .join("\n");
 
     const result = await getFrameworkFromGeminiAPI(summarizedContents);
-
     if (result != "N") {
       const contents2 = await fetchWithRateLimit(
-        `${GITHUB_API_URL}/repos/${username}/${repoName}/contents/${result}`
+        `https://api.github.com/repos/${username}/${repoName}/contents/${result}`
       );
       const summarizedContents2 = JSON.stringify(contents2, null, 2);
 
@@ -104,37 +126,6 @@ async function analyzeFrameworksUsingGeminiAPI(
   return frameworks;
 }
 
-// Helper function to fetch data from Gemini API with exponential backoff
-async function fetchGeminiAPI(
-  prompt: string,
-  retries: number = 3,
-  delay: number = 1000 // Initial delay in milliseconds (1 second)
-): Promise<any> {
-  try {
-    const geminiResponse = await geminiAi(prompt);
-
-    if (geminiResponse.status === 429) {
-      throw new Error("Rate limit exceeded");
-    }
-
-    return await geminiResponse.json();
-  } catch (error) {
-    if (error instanceof AxiosError) {
-      if (retries > 0 && error.message === "Rate limit exceeded") {
-        console.warn(
-          `Rate limit exceeded, retrying in ${
-            delay / 1000
-          }s... (${retries} retries left)`
-        );
-        await new Promise((resolve) => setTimeout(resolve, delay)); // Wait for `delay` time
-        return fetchGeminiAPI(prompt, retries - 1, delay * 2); // Retry with exponential backoff
-      }
-      console.error("Gemini API request failed:", error.message);
-      throw new Error("Failed to fetch data from Gemini");
-    }
-  }
-}
-
 // Helper function to get framework information from Gemini API
 async function getFrameworkFromGeminiAPI(
   summarizedContents: string
@@ -147,7 +138,7 @@ async function getFrameworkFromGeminiAPI(
       if you have nothing just say 'N'
     `;
   const geminiResponse = await fetchGeminiAPI(prompt);
-  return geminiResponse.result || null;
+  return geminiResponse || null;
 }
 
 // Helper function to identify frameworks from Gemini API
@@ -163,7 +154,7 @@ async function identifyFrameworksFromGeminiAPI(
       if No frameworks or libraries are identifiable from the provided information just answer nothing
     `;
   const geminiResponse = await fetchGeminiAPI(prompt);
-  return geminiResponse.result ? geminiResponse.result.split(",") : [];
+  return geminiResponse ? geminiResponse.split(",") : [];
 }
 
 // Function to roast the detected frameworks and provide feedback
@@ -271,7 +262,7 @@ export async function POST(req: NextRequest) {
 
     // Get the analysis and feedback from Gemini for the frameworks
     const geminiResults = await roastFrameworks(frameworks, languages);
-    return new NextResponse(geminiResults.result);
+    return new NextResponse(geminiResults);
   } catch (error) {
     let errorMessage = "An unknown error occurred";
 
