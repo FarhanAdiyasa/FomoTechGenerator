@@ -1,11 +1,41 @@
 import { NextRequest, NextResponse } from "next/server";
 import axios, { AxiosError } from "axios";
 import pLimit from "p-limit";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
+const apiKey = process.env.GEMINI_API_KEY;
 const GITHUB_API_URL = "https://api.github.com";
 const GITHUB_TOKEN = process.env.GITHUB_API_KEY;
 const MAX_CONCURRENT_REQUESTS = 5; // Maximum concurrent requests
 const PER_PAGE = 30;
+if (!apiKey) {
+  throw new Error("GEMINI_API_KEY is not set in .env.local");
+}
+
+const genAI = new GoogleGenerativeAI(apiKey);
+async function geminiAi(prompt: string) {
+  try {
+    // Instantiate the model
+    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+
+    // Generate a response
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
+
+    return NextResponse.json({ result: text });
+  } catch (error) {
+    let errorMessage = "An unknown error occurred";
+
+    if (error instanceof Error) {
+      errorMessage = error.message; // Safely access the message property
+    }
+    return NextResponse.json(
+      { error: `failed to process the request ${errorMessage}` },
+      { status: 500 }
+    );
+  }
+}
 
 async function fetchWithRateLimit(url: string) {
   try {
@@ -45,7 +75,7 @@ async function analyzeFrameworksUsingGeminiAPI(
 
   try {
     const contents = await fetchWithRateLimit(
-      `https://api.github.com/repos/${username}/${repoName}/contents`
+      `${GITHUB_API_URL}/repos/${username}/${repoName}/contents`
     );
     const files = contents.filter((file: any) => file.type === "file");
     const summarizedContents = files
@@ -56,7 +86,7 @@ async function analyzeFrameworksUsingGeminiAPI(
 
     if (result != "N") {
       const contents2 = await fetchWithRateLimit(
-        `https://api.github.com/repos/${username}/${repoName}/contents/${result}`
+        `${GITHUB_API_URL}/repos/${username}/${repoName}/contents/${result}`
       );
       const summarizedContents2 = JSON.stringify(contents2, null, 2);
 
@@ -81,14 +111,7 @@ async function fetchGeminiAPI(
   delay: number = 1000 // Initial delay in milliseconds (1 second)
 ): Promise<any> {
   try {
-    const geminiResponse = await fetch(
-      "https://fomo-tech-generator-gbzs.vercel.app/api/gemini",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt }),
-      }
-    );
+    const geminiResponse = await geminiAi(prompt);
 
     if (geminiResponse.status === 429) {
       throw new Error("Rate limit exceeded");
@@ -227,7 +250,7 @@ export async function POST(req: NextRequest) {
 
     for (const repo of repositories) {
       const repoLanguages = await fetchWithRateLimit(
-        `https://api.github.com/repos/${username}/${repo.name}/languages`
+        `${GITHUB_API_URL}/repos/${username}/${repo.name}/languages`
       );
 
       // Add the languages used in this repo to the set
