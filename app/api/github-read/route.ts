@@ -20,7 +20,7 @@ if (!GEMINI_API_KEY) {
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 
 // Function to call Gemini API directly
-export async function fetchGeminiAPI(
+async function fetchGeminiAPI(
   prompt: string,
   retries: number = MAX_RETRIES,
   delay: number = INITIAL_DELAY
