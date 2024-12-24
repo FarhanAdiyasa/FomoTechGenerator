@@ -39,10 +39,6 @@ export default function InputSection() {
         }
       );
 
-      if (!response.ok) {
-        throw new Error("Error fetching results from the API.");
-      }
-
       const rawData = await response.text(); // Fetch response as text
       const cleanedData = rawData
         .replace(/^```json\n/, "") // Remove the opening code block
