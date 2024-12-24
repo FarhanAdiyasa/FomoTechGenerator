@@ -41,6 +41,7 @@ export default function InputSection() {
       );
 
       const rawData = await response.text(); // Fetch response as text
+      console.log(rawData);
       const cleanedData = rawData
         .replace(/^```json\n/, "") // Remove the opening code block
         .replace(/```$/, ""); // Remove the closing code block
