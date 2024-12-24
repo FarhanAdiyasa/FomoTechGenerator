@@ -23,9 +23,13 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ result: text });
   } catch (error) {
-    console.error("Error calling Gemini API:", error);
+    let errorMessage = "An unknown error occurred";
+
+    if (error instanceof Error) {
+      errorMessage = error.message; // Safely access the message property
+    }
     return NextResponse.json(
-      { error: `failed to process the request ${error.message}` },
+      { error: `failed to process the request ${errorMessage}` },
       { status: 500 }
     );
   }
