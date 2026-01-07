@@ -7,7 +7,7 @@ import InputSection from "./pages/InputSections";
 
 export default function Home() {
   return (
-    <main className="bg-gray-50 min-h-screen">
+    <main className="min-h-screen bg-background text-foreground selection:bg-primary selection:text-black">
       <Header />
       <section id="hero" className="fade-in">
         <HeroSection />
@@ -15,9 +15,6 @@ export default function Home() {
       <section id="features" className="fade-in">
         <Features />
       </section>
-      {/* <section id="testimonials" className="fade-in">
-        <Testimonials />
-      </section> */}
       <section id="input" className="fade-in">
         <InputSection />
       </section>

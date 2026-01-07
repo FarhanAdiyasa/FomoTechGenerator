@@ -1,8 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import Results from "./Results";
 
 export default function InputSection() {
@@ -43,45 +41,45 @@ export default function InputSection() {
   };
 
   return (
-    <section className="py-16 bg-gray-50">
-      <div className="max-w-4xl mx-auto text-center px-4">
-        <h2 className="text-4xl font-bold text-blue-600 mb-8">
+    <section className="py-20 relative overflow-hidden">
+      <div className="max-w-4xl mx-auto text-center px-4 relative z-10">
+        <h2 className="text-3xl md:text-4xl font-pixel text-primary mb-8 uppercase">
           Let’s Get Started
         </h2>
-        <p className="text-gray-600 mb-8">
+        <p className="font-mono text-xl text-gray-300 mb-12 max-w-2xl mx-auto">
           People may hate FOMO, but this one is necessary! Brace yourself,
           we&apos;re about to judge just how FOMO you really are.
         </p>
 
         {/* Input Fields */}
-        <div className="mb-4">
-          <Input
+        <div className="mb-8 max-w-xl mx-auto">
+          <input
             type="text"
-            placeholder="Type your github username"
+            placeholder="TYPE YOUR GITHUB USERNAME..."
             value={githubLink}
             onChange={(e) => setGithubLink(e.target.value)}
-            className={`w-full px-4 py-2 border rounded focus:ring focus:ring-blue-300 ${
-              error && !githubLink ? "border-red-500" : ""
-            }`}
+            className={`w-full bg-black text-white font-mono text-xl p-4 border-2 outline-none transition-colors placeholder:text-gray-600 ${error && !githubLink
+              ? "border-destructive animate-shake"
+              : "border-white focus:border-primary"
+              }`}
           />
         </div>
 
         {/* Submit Button with Animation */}
-        <Button
+        <button
           onClick={handleSubmit}
-          className={`mt-8 bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-3 rounded transition duration-300 ${
-            loading ? "bg-gray-400 cursor-not-allowed" : ""
-          }`}
+          className={`pixel-btn text-xl uppercase w-full max-w-xl ${loading ? "opacity-50 cursor-not-allowed" : ""
+            }`}
           disabled={loading} // Disable button while loading
         >
           {loading ? (
-            <>
-              <span className="animate-spin mr-2">🔄</span>Analyzing...
-            </>
+            <span className="flex items-center justify-center gap-2">
+              <span className="animate-spin">⏳</span> ANALYZING...
+            </span>
           ) : (
-            "Generate My FOMO Report"
+            "GENERATE MY FOMO REPORT"
           )}
-        </Button>
+        </button>
 
         {/* Render Results */}
         {showResults && analysisResult && <Results results={analysisResult} />}

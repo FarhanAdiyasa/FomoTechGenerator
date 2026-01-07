@@ -44,36 +44,37 @@ export default function Header() {
 
   return (
     <header
-      className={`fixed top-0 w-full z-50 transition-all duration-300 ${
-        isHeroSectionVisible ? "bg-white shadow-md" : "bg-transparent"
-      }`}
+      className={`fixed top-0 w-full z-50 transition-all duration-300 border-b-2 ${isHeroSectionVisible
+          ? "bg-background/90 backdrop-blur-sm border-white/10"
+          : "bg-black border-white"
+        }`}
     >
-      <div className="flex justify-between items-center px-8 py-4">
+      <div className="container mx-auto flex justify-between items-center px-4 py-4">
         {/* Branding */}
-        <div className="text-3xl font-extrabold text-blue-600">
-          Tech <span className="text-yellow-300">FOMO</span>
+        <div className="text-xl md:text-2xl font-pixel text-primary tracking-tighter cursor-pointer group">
+          TECH <span className="text-secondary group-hover:animate-pulse">FOMO</span>
         </div>
 
         {/* Navigation */}
-        <nav className="space-x-6">
+        <nav className="flex gap-4">
           <button
             onClick={() => scrollToSection("hero")}
-            className="text-gray-600 hover:text-blue-600 transition-colors"
+            className="font-mono text-lg text-white hover:text-primary transition-colors uppercase"
           >
             Home
           </button>
           <button
             onClick={() => scrollToSection("features")}
-            className="text-gray-600 hover:text-blue-600 transition-colors"
+            className="font-mono text-lg text-white hover:text-primary transition-colors uppercase"
           >
             Features
           </button>
-          {/* <button
-            onClick={() => scrollToSection("testimonials")}
-            className="text-gray-600 hover:text-blue-600 transition-colors"
+          <button
+            onClick={() => scrollToSection("input")}
+            className="pixel-btn text-xs md:text-sm uppercase"
           >
-            Testimonials
-          </button> */}
+            Get Roasted
+          </button>
         </nav>
       </div>
     </header>
