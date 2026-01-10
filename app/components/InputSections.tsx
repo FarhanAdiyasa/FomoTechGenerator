@@ -3,41 +3,37 @@
 import { useState } from "react";
 import Results from "./Results";
 
+import { generateRoastAction } from "@/app/actions";
+
 export default function InputSection() {
   const [githubLink, setGithubLink] = useState("");
   const [showResults, setShowResults] = useState(false);
   const [analysisResult, setAnalysisResult] = useState("");
-  const [loading, setLoading] = useState(false); // Track loading state
-  const [error, setError] = useState<string>(""); // Track error message
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string>("");
 
   const handleSubmit = async () => {
-    // Reset error message when user tries to submit
     setError("");
     setShowResults(false);
-    setLoading(true); // Set loading to true when the button is clicked
+    setLoading(true);
+
     try {
-      const response = await fetch("/api/github-read", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          githubLink,
-        }),
-      });
-      if (!response.ok) {
-        throw new Error("Unexpected API response format.");
+      const result = await generateRoastAction(githubLink);
+
+      if (result.success && result.data) {
+        setAnalysisResult(result.data);
+        setShowResults(true);
+      } else {
+        setError(result.error || "An unknown error occurred.");
+        alert(result.error || "An error occurred.");
       }
-
-      const rawData = await response.text();
-
-      setAnalysisResult(rawData); // Set the cleaned and parsed data
-    } catch (error) {
-      console.error("Error:", error);
-      alert("An error occurred while fetching data.");
+    } catch (err: any) {
+      console.error("Error:", err);
+      setError(err.message);
+      alert("An unexpected error occurred.");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false); // Set loading to false after data is fetched
-    setShowResults(true);
   };
 
   return (
@@ -80,6 +76,13 @@ export default function InputSection() {
             "GENERATE MY FOMO REPORT"
           )}
         </button>
+
+        {/* Error Display */}
+        {error && (
+          <div className="mt-6 p-4 bg-red-900/30 border border-red-500 text-red-200 rounded-lg text-center font-mono animate-pulse">
+            ❌ {error}
+          </div>
+        )}
 
         {/* Render Results */}
         {showResults && analysisResult && <Results results={analysisResult} />}

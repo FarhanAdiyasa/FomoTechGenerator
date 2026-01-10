@@ -1,9 +1,9 @@
 "use client";
 
-import Header from "./pages/Header";
-import HeroSection from "./pages/HeroSection";
-import Features from "./pages/Features";
-import InputSection from "./pages/InputSections";
+import Header from "./components/Header";
+import HeroSection from "./components/HeroSection";
+import Features from "./components/Features";
+import InputSection from "./components/InputSections";
 
 export default function Home() {
   return (

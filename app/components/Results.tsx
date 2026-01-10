@@ -21,7 +21,7 @@ export default function Results({ results }: { results: string }) {
         <h3 className="text-2xl md:text-3xl font-pixel text-primary mb-8 text-center uppercase tracking-wider">
           Your Tech FOMO Report 🚀
         </h3>
-        <h4 className="text-4xl font-bold text-center mb-8 animate-pulse">🔥 💡 🌶️</h4>
+
         <div className="font-mono text-lg md:text-xl text-gray-300 space-y-4">
           {formatText(results)}
         </div>
