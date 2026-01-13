@@ -45,14 +45,24 @@ export default function Header() {
   return (
     <header
       className={`fixed top-0 w-full z-50 transition-all duration-300 border-b-2 ${isHeroSectionVisible
-          ? "bg-background/90 backdrop-blur-sm border-white/10"
-          : "bg-black border-white"
+        ? "bg-background/90 backdrop-blur-sm border-white/10"
+        : "bg-black border-white"
         }`}
     >
       <div className="container mx-auto flex justify-between items-center px-4 py-4">
         {/* Branding */}
-        <div className="text-xl md:text-2xl font-pixel text-primary tracking-tighter cursor-pointer group">
-          TECH <span className="text-secondary group-hover:animate-pulse">FOMO</span>
+        <div
+          onClick={() => scrollToSection("hero")}
+          className="flex items-center gap-3 cursor-pointer group"
+        >
+          <img
+            src="/logo.svg"
+            alt="Tech FOMO Logo"
+            className="w-8 h-8 md:w-10 md:h-10 group-hover:scale-110 transition-transform"
+          />
+          <div className="text-xl md:text-2xl font-pixel text-primary tracking-tighter">
+            TECH <span className="text-secondary group-hover:animate-pulse">FOMO</span>
+          </div>
         </div>
 
         {/* Navigation */}

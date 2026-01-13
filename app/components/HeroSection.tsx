@@ -17,6 +17,11 @@ export default function HeroSection() {
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-primary/20 blur-[100px] rounded-full pointer-events-none" />
 
       <div className="text-center px-6 relative z-10 max-w-4xl mx-auto">
+        <img
+          src="/logo.svg"
+          alt="Tech FOMO Icon"
+          className="w-20 h-20 md:w-32 md:h-32 mx-auto mb-8 animate-pulse drop-shadow-[0_0_15px_rgba(168,85,247,0.5)]"
+        />
         <div className="pixel-box bg-black text-white border-white p-8 md:p-12 mb-12 relative group">
           <h1 className="font-pixel text-3xl md:text-5xl lg:text-6xl leading-tight mb-6">
             IS YOUR <br />
