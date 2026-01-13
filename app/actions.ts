@@ -3,6 +3,11 @@
 import axios, { AxiosError } from "axios";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { unstable_cache } from "next/cache";
+import { kv } from "@vercel/kv";
+
+// Quota config
+const DAILY_TOKEN_LIMIT = 50; // Set a safe daily limit for free tier
+const QUOTA_KEY = "fomotech_daily_quota";
 
 // Configuration
 const GITHUB_API_URL = "https://api.github.com";
@@ -24,7 +29,7 @@ async function fetchGeminiAPI(
     delay: number = INITIAL_DELAY
 ): Promise<string> {
     const safeGenAI = new GoogleGenerativeAI((GEMINI_API_KEY || "").trim());
-    const model = safeGenAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const model = safeGenAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
     for (let attempt = 1; attempt <= retries; attempt++) {
         try {
@@ -33,14 +38,19 @@ async function fetchGeminiAPI(
             return response.text();
         } catch (error: any) {
             console.error(`Gemini API attempt ${attempt} failed:`, error.message);
-            if (attempt < retries && (error.message?.includes("429") || error.message?.includes("Quota"))) {
-                console.warn(`Gemini Quota hit. Waiting ${delay}ms...`);
-                await new Promise((resolve) => setTimeout(resolve, delay));
-                delay *= 2;
+            // Handle quota/limit hit specifically
+            if (error.message?.includes("429") || error.message?.includes("Quota")) {
+                if (attempt < retries) {
+                    console.warn(`Gemini Quota hit. Waiting ${delay}ms...`);
+                    await new Promise((resolve) => setTimeout(resolve, delay));
+                    delay *= 2;
+                    continue;
+                }
+                throw new Error("QUOTA_LIMIT_REACHED");
             }
         }
     }
-    throw new Error("Gemini API request failed (Quota or Error). Please try again later.");
+    throw new Error("Gemini API request failed. Please try again later.");
 }
 
 async function fetchWithRateLimit(url: string) {
@@ -116,34 +126,34 @@ async function performRoast(username: string) {
         summaryContext += "\n---\n";
     }
 
-    // 3. Single Gemini Call (Roast) using "God-Tier Prompt"
+    // 3. Single Gemini Call (Roast) using Optimized God-Tier Prompt
+    // Incremental Quota Tracking
+    try {
+        const currentQuota = await kv.get<number>(QUOTA_KEY) || 0;
+        if (currentQuota >= DAILY_TOKEN_LIMIT) {
+            throw new Error("QUOTA_LIMIT_REACHED");
+        }
+        await kv.incr(QUOTA_KEY);
+    } catch (kvError) {
+        console.warn("KV Quota tracking failed, proceeding anyway:", kvError);
+    }
+
     const prompt = `
-    You are a battle-hardened senior dev who's seen it all—legacy code graveyards, hype cycles crashing, and noobs getting wrecked by outdated stacks in 2026. You're brutally honest, opinionated AF, and don't sugarcoat: if their tech is trash, roast them savage-style until they feel the FOMO burn of being left in the dust. Your mission? Scan this GitHub data, detect the boring/legacy/outdated crap, slap a Tech FOMO Score (0-100, where 0 is "dinosaur extinct" and 100 is "god-tier future-proof"), then hit 'em with a funny, painful, truthful roast that screams "YOU'RE REALLY MISSING OUT" in 2026. End with hyper-specific upgrade recs and a viral CTA to share the pain and upgrade NOW.
+    You are a battle-hardened senior dev who's seen it all. You're brutally honest, opinionated AF, and don't sugarcoat. 
+    Your mission: Scan this GitHub data, detect legacy crap, and hit 'em with a funny, painful, truthful roast that screams "YOU'RE REALLY MISSING OUT" in 2026.
 
     Raw data from user's top repos:
     ${summaryContext}
 
-    Process (think step-by-step, but keep output tight):
-    1. Detect stack: Infer frameworks/tech from files/languages (e.g., package.json + next.config.js = Next.js; pom.xml = ancient Java/Spring; no AI/ML traces = asleep at the wheel).
-    2. Spot outdated/boring: Flag legacy (e.g., jQuery in 2026? LOL), missing trends (no Rust/WebAssembly/AI integrations? Snooze), boring choices (vanilla JS when everyone's on SvelteKit? Yawn).
-    3. Calc FOMO Score: Base on modernity (trending tech +50), innovation (AI/edge stuff +30), relevance to 2026 (scalability/speed +20). Subtract for legacy (-40 per dinosaur tech).
-    4. Savage Roast: Make it funny (memes/slang/emojis), painful (hit ego: "Your code's so 2010s, it's got bell bottoms"), truthful (back with facts). Amp the "missing out" sting: "While you're grinding legacy bugs, real devs are shipping AI agents and laughing to the bank. "
-    5. Upgrades: 3-5 personalized, specific recs (e.g., "Ditch that monolithic Java—migrate to Rust for 10x speed, here's a starter repo: [link]"). Actionable, useful, tied to their stack.
-    6. Viral Hook: End with a shareable CTA like "Share this roast if you're upgrading—or tag a friend who's still in the stone age!  #TechFOMO #UpgradeOrDie"
-
     Constraints:
-    - Output under 500 words: Punchy, screenshot-ready (bold key phrases with **).
-    - Tone: Savage senior dev—cocky, no holds barred, addictive/readable.
-    - Format: 
+    - MAXIMUM 300 words. Be extremely punchy.
+    - Format strictly:
       **Detected Stack:** Bullet list.
-      **Tech FOMO Score: XX/100** (Explain why in 1 savage sentence).
-      **The Roast:** 2-3 para of pure fire.
-      **Upgrade or Die:** Numbered recs.
-      **CTA:** Viral call.
-    - No fluff: Jump straight to the pain, keep it shareable on X/LinkedIn.
-    - Emojis/slaps: Use sparingly for punch (e.g., 🔥 for hot takes, 🦕 for legacy).
-
-    Deliver the FOMO sting—make 'em laugh, cry, then upgrade.
+      **Tech FOMO Score: XX/100** (1 savage sentence why).
+      **The Roast:** 2 blocks of pure fire.
+      **Upgrade or Die:** 3 prioritized, specific recs.
+      **CTA:** 1 viral hook.
+    - No fluff. Bold key phrases with **. Use tech slang carefully. Make it addictive to read.
     `;
 
     return await fetchGeminiAPI(prompt.trim());
@@ -152,13 +162,12 @@ async function performRoast(username: string) {
 // --- Exported Server Action ---
 
 export const generateRoastAction = async (username: string) => {
-    // Cache key v4 (New Prompt).
     const cachedRoast = unstable_cache(
         async (u) => performRoast(u),
-        ['fomo-tech-roast-v4'],
+        ['fomo-tech-roast-v5'], // Iterated version
         {
-            revalidate: 86400,
-            tags: [`roast-${username}`]
+            revalidate: 86400, // 24 hours
+            tags: [`roast - ${username} `]
         }
     );
 
@@ -167,6 +176,28 @@ export const generateRoastAction = async (username: string) => {
         return { success: true, data: result };
     } catch (e: any) {
         console.error("Roast Action Error:", e.message);
-        return { success: false, error: e.message || "Failed to generate roast." };
+
+        if (e.message === "QUOTA_LIMIT_REACHED") {
+            return {
+                success: false,
+                type: 'QUOTA',
+                error: "FomoTech is overheating! 🔥 AI-nya lagi capek nge-roast orang karena kuota Gemini-nya abis kesedot lu pada. Coba lagi besok atau tag gw di LinkedIn biar gw isi bensin!",
+            };
+        }
+
+        return {
+            success: false,
+            error: "GitHub API atau Gemini kayaknya lagi ngambek. Coba cek lagi username-nya bener apa nggak, atau coba lagi sedetik kemudian. 🦖"
+        };
+    }
+}
+
+export const getQuotaStatus = async () => {
+    try {
+        const count = await kv.get<number>(QUOTA_KEY) || 0;
+        const percentage = Math.min(100, Math.round((count / DAILY_TOKEN_LIMIT) * 100));
+        return { count, limit: DAILY_TOKEN_LIMIT, percentage };
+    } catch (e) {
+        return { count: 0, limit: DAILY_TOKEN_LIMIT, percentage: 0 };
     }
 }
