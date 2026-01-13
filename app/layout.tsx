@@ -18,6 +18,9 @@ export const metadata: Metadata = {
   title: "Fomo Tech Generator",
   description:
     "Let’s see what you’re really “missing out on” with the ultimate Tech FOMO test.",
+  icons: {
+    icon: '/favicon.svg',
+  },
 };
 
 export default function RootLayout({
