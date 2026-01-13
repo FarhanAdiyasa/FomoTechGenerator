@@ -17,10 +17,6 @@ const PER_PAGE = 30;
 const MAX_RETRIES = 3;
 const INITIAL_DELAY = 1000;
 
-if (!GEMINI_API_KEY) {
-    throw new Error("GEMINI_API_KEY is not set in .env");
-}
-
 // --- Helper Functions ---
 
 async function fetchGeminiAPI(
@@ -28,7 +24,10 @@ async function fetchGeminiAPI(
     retries: number = MAX_RETRIES,
     delay: number = INITIAL_DELAY
 ): Promise<string> {
-    const safeGenAI = new GoogleGenerativeAI((GEMINI_API_KEY || "").trim());
+    if (!GEMINI_API_KEY) {
+        throw new Error("GEMINI_API_KEY is not configured.");
+    }
+    const safeGenAI = new GoogleGenerativeAI(GEMINI_API_KEY.trim());
     const model = safeGenAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
     for (let attempt = 1; attempt <= retries; attempt++) {
@@ -162,12 +161,15 @@ async function performRoast(username: string) {
 // --- Exported Server Action ---
 
 export const generateRoastAction = async (username: string) => {
+    // Sanitize username for cache tag
+    const safeUsername = username.trim().toLowerCase().replace(/[^a-z0-9]/g, '-');
+
     const cachedRoast = unstable_cache(
         async (u) => performRoast(u),
-        ['fomo-tech-roast-v5'], // Iterated version
+        ['fomo-tech-roast-v6'], // Iterated version
         {
             revalidate: 86400, // 24 hours
-            tags: [`roast - ${username} `]
+            tags: [`roast-${safeUsername}`]
         }
     );
 
