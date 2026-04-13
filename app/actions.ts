@@ -183,13 +183,13 @@ export const generateRoastAction = async (username: string) => {
             return {
                 success: false,
                 type: 'QUOTA',
-                error: "FomoTech is overheating! 🔥 AI-nya lagi capek nge-roast orang karena kuota Gemini-nya abis kesedot lu pada. Coba lagi besok atau tag gw di LinkedIn biar gw isi bensin!",
+                error: "FomoTech is temporarily out of Gemini quota. Please try again tomorrow.",
             };
         }
 
         return {
             success: false,
-            error: "GitHub API atau Gemini kayaknya lagi ngambek. Coba cek lagi username-nya bener apa nggak, atau coba lagi sedetik kemudian. 🦖"
+            error: "GitHub API or Gemini is currently unavailable. Please verify the username and try again in a moment."
         };
     }
 }

@@ -25,12 +25,10 @@ export default function InputSection() {
         setShowResults(true);
       } else {
         setError(result.error || "An unknown error occurred.");
-        alert(result.error || "An error occurred.");
       }
     } catch (err: any) {
       console.error("Error:", err);
-      setError(err.message);
-      alert("An unexpected error occurred.");
+      setError(err?.message || "An unexpected error occurred.");
     } finally {
       setLoading(false);
     }
