@@ -58,21 +58,35 @@ async function fetchGroqAPI(
     throw new Error("Groq API request failed. Please try again later.");
 }
 
-async function fetchWithRateLimit(url: string) {
+async function fetchWithRateLimit(url: string, useAuth = true) {
+    const headers: Record<string, string> = {};
+    if (useAuth && GITHUB_TOKEN) {
+        headers.Authorization = `Bearer ${GITHUB_TOKEN}`;
+    }
+
     try {
-        const response = await axios.get(url, {
-            headers: { Authorization: `Bearer ${GITHUB_TOKEN}` },
-        });
+        const response = await axios.get(url, { headers });
         return response.data;
     } catch (error: any) {
-        if (error.response?.status === 403 && error.response?.headers["x-ratelimit-remaining"] === "0") {
+        const status = error.response?.status;
+
+        // Invalid/expired token — fall back to unauthenticated public API
+        if (status === 401 && useAuth) {
+            console.warn("GitHub token invalid, falling back to unauthenticated requests.");
+            return fetchWithRateLimit(url, false);
+        }
+
+        if (status === 403 && error.response?.headers["x-ratelimit-remaining"] === "0") {
             const resetTime = parseInt(error.response?.headers["x-ratelimit-reset"], 10) * 1000;
             const delay = Math.max(0, resetTime - Date.now()) + 1000;
             await new Promise((resolve) => setTimeout(resolve, delay));
-            return fetchWithRateLimit(url);
+            return fetchWithRateLimit(url, useAuth);
         }
-        // Ignore 404s for contents/languages
-        if (error.response?.status === 404) return [];
+
+        if (status === 404) return [];
+
+        if (status === 403) throw new Error("GITHUB_RATE_LIMIT");
+
         throw error;
     }
 }
@@ -193,9 +207,37 @@ export const generateRoastAction = async (username: string) => {
             };
         }
 
+        if (e.message === "GITHUB_RATE_LIMIT") {
+            return {
+                success: false,
+                error: "GitHub API rate limit reached. Please try again in a few minutes.",
+            };
+        }
+
+        if (e.message === "No public repositories found.") {
+            return {
+                success: false,
+                error: "No public repositories found for this username. Check the spelling or make repos public.",
+            };
+        }
+
+        if (e.message === "GROQ_API_KEY is not configured.") {
+            return {
+                success: false,
+                error: "Groq API key is missing. Add GROQ_API_KEY to your environment variables.",
+            };
+        }
+
+        if (e.message?.includes("Groq API request failed")) {
+            return {
+                success: false,
+                error: "Groq API is currently unavailable. Please try again in a moment.",
+            };
+        }
+
         return {
             success: false,
-            error: "GitHub API or Groq is currently unavailable. Please verify the username and try again in a moment."
+            error: "Something went wrong while fetching GitHub data. Please verify the username and try again.",
         };
     }
 }
