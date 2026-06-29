@@ -1,7 +1,7 @@
 'use server'
 
-import axios, { AxiosError } from "axios";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import axios from "axios";
+import Groq from "groq-sdk";
 import { unstable_cache } from "next/cache";
 import { kv } from "@vercel/kv";
 
@@ -12,35 +12,41 @@ const QUOTA_KEY = "fomotech_daily_quota";
 // Configuration
 const GITHUB_API_URL = "https://api.github.com";
 const GITHUB_TOKEN = process.env.GITHUB_API_KEY;
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
+const GROQ_MODEL = "llama-3.3-70b-versatile";
 const PER_PAGE = 30;
 const MAX_RETRIES = 3;
 const INITIAL_DELAY = 1000;
 
 // --- Helper Functions ---
 
-async function fetchGeminiAPI(
+async function fetchGroqAPI(
     prompt: string,
     retries: number = MAX_RETRIES,
     delay: number = INITIAL_DELAY
 ): Promise<string> {
-    if (!GEMINI_API_KEY) {
-        throw new Error("GEMINI_API_KEY is not configured.");
+    if (!GROQ_API_KEY) {
+        throw new Error("GROQ_API_KEY is not configured.");
     }
-    const safeGenAI = new GoogleGenerativeAI(GEMINI_API_KEY.trim());
-    const model = safeGenAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    const client = new Groq({ apiKey: GROQ_API_KEY.trim() });
 
     for (let attempt = 1; attempt <= retries; attempt++) {
         try {
-            const result = await model.generateContent(prompt);
-            const response = await result.response;
-            return response.text();
+            const completion = await client.chat.completions.create({
+                model: GROQ_MODEL,
+                messages: [{ role: "user", content: prompt }],
+                temperature: 0.9,
+                max_tokens: 1024,
+            });
+            const text = completion.choices[0]?.message?.content;
+            if (!text) throw new Error("Empty response from Groq");
+            return text;
         } catch (error: any) {
-            console.error(`Gemini API attempt ${attempt} failed:`, error.message);
-            // Handle quota/limit hit specifically
-            if (error.message?.includes("429") || error.message?.includes("Quota")) {
+            console.error(`Groq API attempt ${attempt} failed:`, error.message);
+            const status = error.status ?? error.response?.status;
+            if (status === 429 || error.message?.includes("rate_limit")) {
                 if (attempt < retries) {
-                    console.warn(`Gemini Quota hit. Waiting ${delay}ms...`);
+                    console.warn(`Groq rate limit hit. Waiting ${delay}ms...`);
                     await new Promise((resolve) => setTimeout(resolve, delay));
                     delay *= 2;
                     continue;
@@ -49,7 +55,7 @@ async function fetchGeminiAPI(
             }
         }
     }
-    throw new Error("Gemini API request failed. Please try again later.");
+    throw new Error("Groq API request failed. Please try again later.");
 }
 
 async function fetchWithRateLimit(url: string) {
@@ -125,7 +131,7 @@ async function performRoast(username: string) {
         summaryContext += "\n---\n";
     }
 
-    // 3. Single Gemini Call (Roast) using Optimized God-Tier Prompt
+    // 3. Single Groq Call (Roast) using Optimized God-Tier Prompt
     // Incremental Quota Tracking
     try {
         const currentQuota = await kv.get<number>(QUOTA_KEY) || 0;
@@ -155,7 +161,7 @@ async function performRoast(username: string) {
     - No fluff. Bold key phrases with **. Use tech slang carefully. Make it addictive to read.
     `;
 
-    return await fetchGeminiAPI(prompt.trim());
+    return await fetchGroqAPI(prompt.trim());
 }
 
 // --- Exported Server Action ---
@@ -183,13 +189,13 @@ export const generateRoastAction = async (username: string) => {
             return {
                 success: false,
                 type: 'QUOTA',
-                error: "FomoTech is temporarily out of Gemini quota. Please try again tomorrow.",
+                error: "FomoTech is temporarily out of Groq quota. Please try again later.",
             };
         }
 
         return {
             success: false,
-            error: "GitHub API or Gemini is currently unavailable. Please verify the username and try again in a moment."
+            error: "GitHub API or Groq is currently unavailable. Please verify the username and try again in a moment."
         };
     }
 }
