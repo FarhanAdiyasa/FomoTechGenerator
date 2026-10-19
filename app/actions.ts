@@ -1,253 +1,118 @@
-'use server'
+'use server';
 
-import axios from "axios";
-import Groq from "groq-sdk";
 import { unstable_cache } from "next/cache";
 import { kv } from "@vercel/kv";
+import { analyzeUserGithub } from "@/lib/github-analyzer";
+import { generateRoastReport } from "@/lib/ai-roaster";
+import { RoastReport } from "@/lib/types";
 
 // Quota config
-const DAILY_TOKEN_LIMIT = 50; // Set a safe daily limit for free tier
+const DAILY_TOKEN_LIMIT = 200; // Increased capacity with multi-tier fallback
 const QUOTA_KEY = "fomotech_daily_quota";
 
-// Configuration
-const GITHUB_API_URL = "https://api.github.com";
-const GITHUB_TOKEN = process.env.GITHUB_API_KEY;
-const GROQ_API_KEY = process.env.GROQ_API_KEY;
-const GROQ_MODEL = "llama-3.3-70b-versatile";
-const PER_PAGE = 30;
-const MAX_RETRIES = 3;
-const INITIAL_DELAY = 1000;
+async function performStructuredRoast(username: string): Promise<RoastReport> {
+  const cleanUsername = username.trim().replace(/^@/, "");
+  if (!cleanUsername) throw new Error("USERNAME_REQUIRED");
 
-// --- Helper Functions ---
+  // Track quota metric if KV is configured
+  try {
+    await kv.incr(QUOTA_KEY);
+  } catch (kvError) {
+    // KV is optional in local or custom deployment
+  }
 
-async function fetchGroqAPI(
-    prompt: string,
-    retries: number = MAX_RETRIES,
-    delay: number = INITIAL_DELAY
-): Promise<string> {
-    if (!GROQ_API_KEY) {
-        throw new Error("GROQ_API_KEY is not configured.");
-    }
-    const client = new Groq({ apiKey: GROQ_API_KEY.trim() });
+  // 1. Analyze GitHub repos & dependencies forensically
+  const profile = await analyzeUserGithub(cleanUsername);
 
-    for (let attempt = 1; attempt <= retries; attempt++) {
-        try {
-            const completion = await client.chat.completions.create({
-                model: GROQ_MODEL,
-                messages: [{ role: "user", content: prompt }],
-                temperature: 0.9,
-                max_tokens: 1024,
-            });
-            const text = completion.choices[0]?.message?.content;
-            if (!text) throw new Error("Empty response from Groq");
-            return text;
-        } catch (error: any) {
-            console.error(`Groq API attempt ${attempt} failed:`, error.message);
-            const status = error.status ?? error.response?.status;
-            if (status === 429 || error.message?.includes("rate_limit")) {
-                if (attempt < retries) {
-                    console.warn(`Groq rate limit hit. Waiting ${delay}ms...`);
-                    await new Promise((resolve) => setTimeout(resolve, delay));
-                    delay *= 2;
-                    continue;
-                }
-                throw new Error("QUOTA_LIMIT_REACHED");
-            }
-        }
-    }
-    throw new Error("Groq API request failed. Please try again later.");
+  // 2. Generate structured roast report (Groq -> Gemini -> Deterministic Fallback)
+  const report = await generateRoastReport(profile);
+
+  return report;
 }
 
-async function fetchWithRateLimit(url: string, useAuth = true) {
-    const headers: Record<string, string> = {};
-    if (useAuth && GITHUB_TOKEN) {
-        headers.Authorization = `Bearer ${GITHUB_TOKEN}`;
+export const getRoastReportAction = async (
+  username: string
+): Promise<{ success: boolean; report?: RoastReport; error?: string }> => {
+  const clean = username.trim().toLowerCase().replace(/^@/, "");
+  if (!clean) {
+    return { success: false, error: "Please enter a valid GitHub username." };
+  }
+
+  const safeTag = clean.replace(/[^a-z0-9]/g, "-");
+
+  const cachedRoast = unstable_cache(
+    async (u: string) => performStructuredRoast(u),
+    ["fomo-tech-roast-v7-structured"],
+    {
+      revalidate: 86400, // 24 hours
+      tags: [`roast-report-${safeTag}`],
+    }
+  );
+
+  try {
+    const report = await cachedRoast(clean);
+    return { success: true, report };
+  } catch (err: any) {
+    console.error("Roast execution error:", err?.message || err);
+
+    if (err?.message === "USER_NOT_FOUND") {
+      return { success: false, error: `GitHub user "@${clean}" does not exist. Check spelling!` };
+    }
+    if (err?.message === "NO_PUBLIC_REPOS") {
+      return {
+        success: false,
+        error: `User "@${clean}" has no public repositories to analyze.`,
+      };
+    }
+    if (err?.message === "GITHUB_RATE_LIMIT") {
+      return {
+        success: false,
+        error: "GitHub API rate limit exceeded. Please wait a minute and retry.",
+      };
     }
 
-    try {
-        const response = await axios.get(url, { headers });
-        return response.data;
-    } catch (error: any) {
-        const status = error.response?.status;
+    return {
+      success: false,
+      error: "Could not complete GitHub tech audit. Please try again.",
+    };
+  }
+};
 
-        // Invalid/expired token — fall back to unauthenticated public API
-        if (status === 401 && useAuth) {
-            console.warn("GitHub token invalid, falling back to unauthenticated requests.");
-            return fetchWithRateLimit(url, false);
-        }
-
-        if (status === 403 && error.response?.headers["x-ratelimit-remaining"] === "0") {
-            const resetTime = parseInt(error.response?.headers["x-ratelimit-reset"], 10) * 1000;
-            const delay = Math.max(0, resetTime - Date.now()) + 1000;
-            await new Promise((resolve) => setTimeout(resolve, delay));
-            return fetchWithRateLimit(url, useAuth);
-        }
-
-        if (status === 404) return [];
-
-        if (status === 403) throw new Error("GITHUB_RATE_LIMIT");
-
-        throw error;
-    }
-}
-
-async function fetchRepoList(username: string) {
-    const repositories = [];
-    let page = 1;
-    // Fetch up to 10 repos (limit for context size)
-    while (repositories.length < 10) {
-        const url = `${GITHUB_API_URL}/users/${username}/repos?per_page=${PER_PAGE}&page=${page}`;
-        const batch = await fetchWithRateLimit(url);
-        if (!Array.isArray(batch)) break;
-        repositories.push(...batch);
-        if (batch.length < PER_PAGE) break;
-        page++;
-    }
-    // Sort by updated_at desc to get recent active repos
-    repositories.sort((a: any, b: any) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
-
-    return repositories.slice(0, 3); // Analyze top 3 active repos
-}
-
-// --- Main Logic (Single Shot Optimization) ---
-
-async function performRoast(username: string) {
-    if (!username) throw new Error("Username required");
-
-    // 1. Fetch Repos
-    const repositories = await fetchRepoList(username);
-    if (repositories.length === 0) throw new Error("No public repositories found.");
-
-    let summaryContext = `Target Username: ${username}\n\n`;
-
-    // 2. Collect Data (Github API only - Fast & High Limit)
-    for (const repo of repositories) {
-        summaryContext += `Repository: ${repo.name}\n`;
-        summaryContext += `Description: ${repo.description || "None"}\n`;
-
-        // Fetch Languages
-        const languagesCtx = await fetchWithRateLimit(`${GITHUB_API_URL}/repos/${username}/${repo.name}/languages`);
-        if (languagesCtx && typeof languagesCtx === 'object') {
-            const topLangs = Object.keys(languagesCtx).slice(0, 5).join(", ");
-            summaryContext += `Languages: ${topLangs}\n`;
-        }
-
-        // Fetch Top Level Files (to guess framework)
-        const contents = await fetchWithRateLimit(`${GITHUB_API_URL}/repos/${username}/${repo.name}/contents`);
-        if (Array.isArray(contents)) {
-            const files = contents
-                .filter((f: any) => f.type === "file")
-                .map((f: any) => f.name)
-                .slice(0, 15) // Limit files per repo
-                .join(", ");
-            summaryContext += `Files: ${files}\n`;
-        }
-        summaryContext += "\n---\n";
-    }
-
-    // 3. Single Groq Call (Roast) using Optimized God-Tier Prompt
-    // Incremental Quota Tracking
-    try {
-        const currentQuota = await kv.get<number>(QUOTA_KEY) || 0;
-        if (currentQuota >= DAILY_TOKEN_LIMIT) {
-            throw new Error("QUOTA_LIMIT_REACHED");
-        }
-        await kv.incr(QUOTA_KEY);
-    } catch (kvError) {
-        console.warn("KV Quota tracking failed, proceeding anyway:", kvError);
-    }
-
-    const prompt = `
-    You are a battle-hardened senior dev who's seen it all. You're brutally honest, opinionated AF, and don't sugarcoat. 
-    Your mission: Scan this GitHub data, detect legacy crap, and hit 'em with a funny, painful, truthful roast that screams "YOU'RE REALLY MISSING OUT" in 2026.
-
-    Raw data from user's top repos:
-    ${summaryContext}
-
-    Constraints:
-    - MAXIMUM 300 words. Be extremely punchy.
-    - Format strictly:
-      **Detected Stack:** Bullet list.
-      **Tech FOMO Score: XX/100** (1 savage sentence why).
-      **The Roast:** 2 blocks of pure fire.
-      **Upgrade or Die:** 3 prioritized, specific recs.
-      **CTA:** 1 viral hook.
-    - No fluff. Bold key phrases with **. Use tech slang carefully. Make it addictive to read.
-    `;
-
-    return await fetchGroqAPI(prompt.trim());
-}
-
-// --- Exported Server Action ---
-
+// Backward-compatibility wrapper for legacy components
 export const generateRoastAction = async (username: string) => {
-    // Sanitize username for cache tag
-    const safeUsername = username.trim().toLowerCase().replace(/[^a-z0-9]/g, '-');
+  const result = await getRoastReportAction(username);
+  if (!result.success || !result.report) {
+    return { success: false, error: result.error || "An error occurred." };
+  }
 
-    const cachedRoast = unstable_cache(
-        async (u) => performRoast(u),
-        ['fomo-tech-roast-v6'], // Iterated version
-        {
-            revalidate: 86400, // 24 hours
-            tags: [`roast-${safeUsername}`]
-        }
-    );
+  const r = result.report;
+  const legacyFormatted = `
+**Detected Stack:**
+${r.detectedStack.map((s) => `- ${s.category}: ${s.items.join(", ")}`).join("\n")}
 
-    try {
-        const result = await cachedRoast(username);
-        return { success: true, data: result };
-    } catch (e: any) {
-        console.error("Roast Action Error:", e.message);
+**Tech FOMO Score: ${r.fomoScore}/100** (${r.fomoGrade}) - ${r.roastHeadline}
 
-        if (e.message === "QUOTA_LIMIT_REACHED") {
-            return {
-                success: false,
-                type: 'QUOTA',
-                error: "FomoTech is temporarily out of Groq quota. Please try again later.",
-            };
-        }
+**The Roast:**
+${r.roastBody.join("\n\n")}
 
-        if (e.message === "GITHUB_RATE_LIMIT") {
-            return {
-                success: false,
-                error: "GitHub API rate limit reached. Please try again in a few minutes.",
-            };
-        }
+**Upgrade or Die:**
+${r.modernUpgrades.map((u) => `- **${u.current}** ➔ ${u.upgradeTo}: ${u.impact}`).join("\n")}
 
-        if (e.message === "No public repositories found.") {
-            return {
-                success: false,
-                error: "No public repositories found for this username. Check the spelling or make repos public.",
-            };
-        }
+**Actionable Modernization Prompt:**
+\`\`\`markdown
+${r.actionableCursorPrompt}
+\`\`\`
+`.trim();
 
-        if (e.message === "GROQ_API_KEY is not configured.") {
-            return {
-                success: false,
-                error: "Groq API key is missing. Add GROQ_API_KEY to your environment variables.",
-            };
-        }
-
-        if (e.message?.includes("Groq API request failed")) {
-            return {
-                success: false,
-                error: "Groq API is currently unavailable. Please try again in a moment.",
-            };
-        }
-
-        return {
-            success: false,
-            error: "Something went wrong while fetching GitHub data. Please verify the username and try again.",
-        };
-    }
-}
+  return { success: true, data: legacyFormatted, report: r };
+};
 
 export const getQuotaStatus = async () => {
-    try {
-        const count = await kv.get<number>(QUOTA_KEY) || 0;
-        const percentage = Math.min(100, Math.round((count / DAILY_TOKEN_LIMIT) * 100));
-        return { count, limit: DAILY_TOKEN_LIMIT, percentage };
-    } catch (e) {
-        return { count: 0, limit: DAILY_TOKEN_LIMIT, percentage: 0 };
-    }
-}
+  try {
+    const count = (await kv.get<number>(QUOTA_KEY)) || 0;
+    const percentage = Math.min(100, Math.round((count / DAILY_TOKEN_LIMIT) * 100));
+    return { count, limit: DAILY_TOKEN_LIMIT, percentage };
+  } catch {
+    return { count: 0, limit: DAILY_TOKEN_LIMIT, percentage: 0 };
+  }
+};

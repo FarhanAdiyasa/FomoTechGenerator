@@ -15,6 +15,7 @@ const vt323 = VT323({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "https://fomotech.dev"),
   title: "Fomo Tech Generator",
   description:
     "Let’s see what you’re really “missing out on” with the ultimate Tech FOMO test.",

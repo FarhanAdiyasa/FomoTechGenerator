@@ -1,7 +1,22 @@
 "use client";
 
-export default function Results({ results }: { results: string }) {
-  // Format the text and convert **text** to <b>text</b>
+import RoastCard from "./RoastCard";
+import { RoastReport } from "@/lib/types";
+
+export default function Results({ 
+  results, 
+  report 
+}: { 
+  results?: string; 
+  report?: RoastReport;
+}) {
+  if (report) {
+    return <RoastCard report={report} />;
+  }
+
+  if (!results) return null;
+
+  // Format text and convert **text** to highlighted bold
   const formatText = (text: string) => {
     const formattedText = text.replace(/\*\*(.*?)\*\*/g, "<b class='text-secondary'>$1</b>");
     return formattedText
@@ -25,7 +40,6 @@ export default function Results({ results }: { results: string }) {
         <div className="font-mono text-lg md:text-xl text-gray-300 space-y-4">
           {formatText(results)}
         </div>
-        <div className="text-center mt-8"></div>
       </div>
     </div>
   );
